@@ -31,7 +31,9 @@ textarea{resize:vertical;min-height:70px}input[type=checkbox]{width:auto;margin-
 label{display:block;font-size:12px;color:var(--m);margin:9px 0 3px}label.ck{font-size:14px;color:var(--t)}
 button{font:inherit;border:0;border-radius:10px;padding:10px 14px;background:var(--a);color:#fff;cursor:pointer}
 button.g{background:transparent;color:var(--a);border:1px solid var(--a)}button.r{background:#dc2626}button.w{width:100%}button.s{padding:6px 10px;font-size:13px}
-.row{display:flex;gap:6px;align-items:center;margin-bottom:6px}.row input{flex:1;min-width:0}.row input:first-child{flex:3}
+.row{display:flex;gap:6px;align-items:center;margin-bottom:6px}.row input{flex:1;min-width:0}
+.row input[type=number]{padding:9px 2px;text-align:center;direction:ltr;min-width:44px;-moz-appearance:textfield}.row input[type=number]::-webkit-inner-spin-button,.row input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.dwrap{flex:1.1;min-width:54px;max-width:86px;display:flex;flex-direction:column;gap:3px}.dwrap input{flex:none!important;width:100%}.row input:first-child{flex:3}
 .acts{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}.acts button{flex:1;min-width:120px}
 .fg{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0 12px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px}.k{background:var(--c);border:1px solid var(--b);border-radius:12px;padding:12px}.k .m{font-size:12px}.k b{font-size:18px;display:block;margin-top:4px}
@@ -148,7 +150,7 @@ function pDesign(v){const d=st.design;
  <div class="card"><h2>🏢 بيانات المنشأة</h2><div class="m" style="margin-bottom:8px">الاسم، الرقم الضريبي، السجل التجاري، والعنوان تُعدَّل من صفحة الإعدادات.</div><button class="g" onclick="go('set')">الذهاب إلى الإعدادات</button></div>
  <div class="card"><h2>معاينة مباشرة</h2>
  <div class="doc" style="box-shadow:none;width:auto;min-height:0;padding:22px;border:1px solid var(--b)">
- <div class="dh"><img class="lg" src="${getLogo()}"><div class="dh-l"><div class="cn">${esc(st.set.name)}</div><div class="sm">الرقم الضريبي: ${esc(st.set.vat)}<br>س.ت: ${esc(st.set.cr)}</div></div></div>
+ <div class="dh"><img class="lg" src="${getLogo()}"><div class="dh-l"><div class="cn">${esc(st.set.name)}</div><div class="sm">الرقم الضريبي: <span dir="ltr">${esc(st.set.vat)}</span><br>س.ت: <span dir="ltr">${esc(st.set.cr)}</span></div></div></div>
  <div class="dtitle">فاتورة ضريبية</div>
  </div></div></div>`}
 function uploadLogo(file){if(!file)return;
@@ -339,7 +341,11 @@ function applyDesignVars(){
 const paidOf=i=>r2(iss('vch').filter(v=>v.inv&&v.inv===i.no).reduce((s,v)=>s+v.a,0));
 const leftOf=i=>r2(i.total+noteAdjust(i.no)-paidOf(i));
 const bal=cid=>r2(iss('inv').filter(x=>x.cid===cid).reduce((s,x)=>s+x.total+noteAdjust(x.no),0)-iss('vch').filter(v=>v.cid===cid).reduce((s,v)=>s+v.a,0));
-const net=(l,incl)=>{const g=(l.q||0)*(l.p||0)*(1-(l.disc||0)/100);return incl?g/1.15:g};
+const discAmt=l=>{const g=(l.q||0)*(l.p||0),d=Math.max(0,+l.disc||0);return l.dt==='a'?Math.min(d,g):g*Math.min(d,100)/100};
+const net=(l,incl)=>{const g=(l.q||0)*(l.p||0)-discAmt(l);return incl?g/1.15:g};
+const discLabel=l=>l.dt==='a'?f(l.disc||0)+' ر.س':(l.disc||0)+'%';
+const retLine=l=>({...l,q:l.retQty,disc:l.dt==='a'?r2((l.disc||0)*l.retQty/(l.q||1)):(l.disc||0)});
+function togDisc(i){const l=ed.l[i];l.dt=l.dt==='a'?'p':'a';const b=document.getElementById('dtb'+i);if(b)b.textContent=l.dt==='a'?'ر.س':'%';const e=document.getElementById('dv'+i);if(e)e.placeholder=l.dt==='a'?'مبلغ':'%';updLines()}
 const calc=(ls,incl)=>{const sub=r2(ls.reduce((s,l)=>s+net(l,incl),0)),tax=r2(sub*.15);return{sub,tax,total:r2(sub+tax)}};
 const lineTotal=(l,incl)=>r2(net(l,incl)*(incl?1.15:1.15));
 const cusOf=id=>st.cus.find(c=>c.id==id);
@@ -371,7 +377,7 @@ function filterCustPick(inputId){const q=(document.getElementById(inputId).value
  const matches=st.cus.filter(c=>c.n.toLowerCase().includes(q)||String(c.id).padStart(6,'0').includes(q)||String(c.id).includes(q)).slice(0,8);
  box.style.display='block';
  box.innerHTML=(q?matches:st.cus.slice(0,8)).map(c=>`<div onclick="pickCust(${c.id},'${inputId}')">#${String(c.id).padStart(6,'0')} — ${esc(c.n)}</div>`).join('')||'<div class="m" style="padding:9px 12px">لا نتائج — اضغط "+ عميل جديد"</div>'}
-function pickCust(cid,inputId){if(custPickTarget==='ed')ed.cid=cid;else if(custPickTarget==='rd'){rd.cid=cid;delete rd.totalRef;if(rd.full)rd.a=rcpFullAmount()}
+function pickCust(cid,inputId){if(custPickTarget==='ed')ed.cid=cid;else if(custPickTarget==='rd'){rd.cid=cid;rd.total=rcpCalcTotal();if(rd.full)rd.a=rd.total}
  const box=document.getElementById(inputId+'_list');if(box)box.style.display='none';
  draw()}
 function blank(k){return{kind:k,id:'',ty:'T',cid:'',date:today(),l:[{n:'',q:1,p:0,disc:0}],incl:false,note:'',paidFull:false,paidAmt:0,fromQuo:''}}
@@ -460,10 +466,10 @@ function lineRow(l,i){return `<div class="row" style="align-items:flex-start"><d
  </div>
  <input type="number" inputmode="decimal" value="${l.q}" placeholder="الكمية" oninput="ed.l[${i}].q=+this.value;updLines()">
  <input id="p${i}" type="number" inputmode="decimal" value="${l.p}" placeholder="السعر" oninput="ed.l[${i}].p=+this.value;updLines()">
- <input type="number" inputmode="decimal" value="${l.disc||0}" placeholder="خصم%" style="max-width:62px" oninput="ed.l[${i}].disc=+this.value;updLines()">
+ <div class="dwrap"><input id="dv${i}" type="number" inputmode="decimal" min="0" value="${l.disc||0}" placeholder="${l.dt==='a'?'مبلغ':'%'}" oninput="ed.l[${i}].disc=+this.value;updLines()"><button type="button" id="dtb${i}" class="g" style="padding:4px;font-size:12px" onclick="togDisc(${i})">${l.dt==='a'?'ر.س':'%'}</button></div>
  <span id="lt${i}" style="flex:1;max-width:76px;font-size:13px;text-align:center;padding-top:9px">${f(lineTotal(l,ed.incl))}</span>
  <button class="r s" onclick="delLine(${i})">✕</button></div>`}
-function lineHead(){return `<div class="row m" style="margin-bottom:2px"><span style="flex:3">الصنف / الوصف</span><span style="flex:1">الكمية</span><span style="flex:1">السعر</span><span style="flex:1;max-width:62px">خصم%</span><span style="flex:1;max-width:76px">المجموع</span><span style="width:34px"></span></div>`}
+function lineHead(){return `<div class="row m" style="margin-bottom:2px"><span style="flex:3">الصنف / الوصف</span><span style="flex:1">الكمية</span><span style="flex:1">السعر</span><span style="flex:1;max-width:86px">الخصم</span><span style="flex:1;max-width:76px">المجموع</span><span style="width:34px"></span></div>`}
 function pick(i,val){ed.l[i].n=val;const p=st.prods.find(x=>x.n===val);if(p){ed.l[i].p=p.p;const e=document.getElementById('p'+i);if(e)e.value=p.p}updLines()}
 function delLine(i){if(ed.l.length>1)ed.l.splice(i,1);rl()}
 function addLine(){ed.l.push({n:'',q:1,p:0,disc:0});rl()}
@@ -485,7 +491,7 @@ function pEdit(v){custPickTarget='ed';const k=ed.kind,isI=k==='inv',qs=iss('quo'
  </div><div class="card" id="tt"></div><div id="errmsg" class="err"></div>
  <div class="acts"><button class="g" onclick="doPreview()">👁 معاينة</button><button class="g" onclick="saveDoc('draft')">💾 حفظ كمسودة</button><button onclick="saveDoc('issued')">✅ ${ed.id&&st[k].find(x=>x.id===ed.id&&x.status==='issued')?'حفظ التعديلات':'إصدار'}</button></div></div>`;rl()}
 function applyQuo(id){const q=st.quo.find(x=>x.id===id);if(!q)return;ed.cid=q.cid||'';ed.l=JSON.parse(JSON.stringify(q.l));ed.incl=!!q.incl;ed.note=q.note||'';ed.fromQuo=q.no;go('edit')}
-function buildRec(status){const k=ed.kind,ls=ed.l.filter(l=>l.q>0).map(l=>({n:l.n||'بند',desc:l.desc||'',q:l.q,p:l.p||0,disc:l.disc||0})),t=calc(ls,ed.incl);
+function buildRec(status){const k=ed.kind,ls=ed.l.filter(l=>l.q>0).map(l=>({n:l.n||'بند',desc:l.desc||'',q:l.q,p:l.p||0,disc:l.disc||0,dt:l.dt==='a'?'a':'p'})),t=calc(ls,ed.incl);
  return{id:ed.id||uid(),status,cid:ed.cid,date:ed.date,l:ls,incl:ed.incl,note:ed.note||'',fromQuo:ed.fromQuo||'',dPaidFull:ed.paidFull,dPaid:+ed.paidAmt||0,...(k==='inv'?{ty:ed.ty}:{}),...t}}
 function doPreview(){const ls=ed.l.filter(l=>l.q>0);if(!ls.length)return showErr('أضف بنداً واحداً على الأقل (كمية وسعر) لتظهر المعاينة');
  const r=buildRec('draft');r.no='';pv={k:ed.kind,rec:r};go('prev')}
@@ -519,9 +525,9 @@ if(typeof window!=='undefined'&&window.addEventListener){
 function docHTML(k,r){const isI=k==='inv',c=custOf(r),incl=!!r.incl,ls=r.l||[],hasD=ls.some(l=>l.disc>0);
  const title=k==='quo'?'عرض سعر':(r.ty==='S'?'فاتورة ضريبية مبسطة':'فاتورة ضريبية'),no=fmtNo(k,r);
  const pay=(r.status==='draft')?(r.dPaidFull?r.total:(r.dPaid||0)):(isI?paidOf(r):0);
- const rows=ls.map(l=>{const n=net(l,incl),up=incl?l.p/1.15:l.p;return `<tr><td>${esc(l.n)}${l.desc?`<div class="custdetail" style="margin-top:2px">${esc(l.desc)}</div>`:''}</td><td class="c">${f(up)}</td><td class="c">${l.q}</td>${hasD?`<td class="c">${l.disc||0}%</td>`:''}<td class="c">${f(n)}</td></tr>`}).join('');
- return `<div class="doc" id="docsrc"><div class="dh"><div><img class="lg" src="${getLogo()}"><div class="dno"><b>${k==='quo'?'رقم عرض السعر':'رقم الفاتورة'}</b><div class="n">${esc(no)}</div><div class="dt">${k==='quo'?'تاريخ عرض السعر':'تاريخ الفاتورة'}<br>${r.date}</div></div></div>
- <div class="dh-l"><div class="cn">${esc(st.set.name)}</div><div class="sm">الرقم الضريبي: ${esc(st.set.vat)}<br>س.ت: ${esc(st.set.cr)}<br>${esc(st.set.addr)}</div><div class="totbadge">${f(r.total)} ر.س</div></div></div>
+ const rows=ls.map(l=>{const n=net(l,incl),up=incl?l.p/1.15:l.p;return `<tr><td>${esc(l.n)}${l.desc?`<div class="custdetail" style="margin-top:2px">${esc(l.desc)}</div>`:''}</td><td class="c">${f(up)}</td><td class="c">${l.q}</td>${hasD?`<td class="c">${discLabel(l)}</td>`:''}<td class="c">${f(n)}</td></tr>`}).join('');
+ return `<div class="doc" id="docsrc"><div class="dh"><div><img class="lg" src="${getLogo()}"><div class="dno"><b>${k==='quo'?'رقم عرض السعر':'رقم الفاتورة'}</b><div class="n" dir="ltr">${esc(no)}</div><div class="dt">${k==='quo'?'تاريخ عرض السعر':'تاريخ الفاتورة'}<br><span dir="ltr">${r.date}</span></div></div></div>
+ <div class="dh-l"><div class="cn">${esc(st.set.name)}</div><div class="sm">الرقم الضريبي: <span dir="ltr">${esc(st.set.vat)}</span><br>س.ت: <span dir="ltr">${esc(st.set.cr)}</span><br>${esc(st.set.addr)}</div><div class="totbadge" dir="ltr">${f(r.total)} ر.س</div></div></div>
  <div class="dtitle">${title}</div>
  <table class="it"><tr><th>البند</th><th class="c">سعر الوحدة</th><th class="c">الكمية</th>${hasD?'<th class="c">الخصم</th>':''}<th class="c">المجموع</th></tr>${rows}</table>
  <div class="sum"><div class="sr">${c?`<div class="sm">${k==='quo'?'عرض سعر إلى':'فاتورة إلى'}</div><div class="custname">${esc(c.n)}</div>${c.vat?`<div class="custdetail">الرقم الضريبي: ${esc(c.vat)}</div>`:''}${c.cr?`<div class="custdetail">س.ت: ${esc(c.cr)}</div>`:''}${c.addr?`<div class="custdetail">${esc(c.addr)}</div>`:''}`:'<div class="sm">عميل نقدي</div>'}
@@ -546,13 +552,18 @@ function doPreviewR(){if(!(rd.a>0))return showErr('أدخل مبلغاً أكب�
  pv={k:'rcp',rec:{id:rd.id||'',status:'draft',no:'',date:rd.date,cid:rd.cid,a:rd.a,reason:rd.reason,m:rd.m,inv:rd.inv}};go('prev')}
 function convToInv(id){const q=st.quo.find(x=>x.id===id);if(!q)return;ed=blank('inv');ed.cid=q.cid||'';ed.l=JSON.parse(JSON.stringify(q.l));ed.incl=!!q.incl;ed.note=q.note||'';ed.fromQuo=q.no;go('edit');toast('تم نقل بيانات عرض السعر — راجعها ثم أصدر الفاتورة')}
 function delDoc(k,id){ask('حذف هذا المستند نهائياً؟',()=>{st[k]=st[k].filter(x=>x.id!==id);S(k);cloudDel(k==='inv'?'invoices':'quotes',id);toast('تم الحذف');go(k==='inv'?'list':'quol')})}
-function rcpFor(id){const i=st.inv.find(x=>x.id===id);rd=blankR();rd.cid=i.cid||'';rd.a=leftOf(i);rd.reason='تحصيل فاتورة '+i.no;rd.inv=i.no;rd.full=true;go('rcp')}
+function rcpFor(id){const i=st.inv.find(x=>x.id===id);rd=blankR();rd.cid=i.cid||'';rd.total=r2(leftOf(i));rd.a=rd.total;rd.reason='تحصيل فاتورة '+i.no;rd.inv=i.no;rd.full=true;go('rcp')}
 
 /* ---------- export (PDF / image) ---------- */
 /* Real browser download (no Claude runtime dependency — this is a standalone website now) */
-function browserSaveFile(filename,data){
+async function browserSaveFile(filename,data){
  try{
   const blob=(data instanceof Blob)?data:new Blob([data]);
+  if(typeof navigator!=='undefined'&&navigator.share&&navigator.canShare){
+   try{
+    const file=new File([blob],filename,{type:blob.type||'application/octet-stream'});
+    if(navigator.canShare({files:[file]})){await navigator.share({files:[file]});return true}
+   }catch(shareErr){if(shareErr&&shareErr.name==='AbortError')return true}}
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
   a.href=url;a.download=filename;a.rel='noopener';
@@ -561,7 +572,7 @@ function browserSaveFile(filename,data){
   return true
  }catch(e){console.error('download failed',e);return false}}
 const nativeDL={save:async({filename,data})=>{
- const ok=browserSaveFile(filename,data);
+ const ok=await browserSaveFile(filename,data);
  if(!ok)throw new Error('download failed');
  return{status:'saved'}}};
 const DLP=Promise.resolve(nativeDL);
@@ -600,55 +611,54 @@ function pRcpL(v){const rows=st.vch.slice().reverse().filter(x=>dateOk(x.date,'v
  <div class="card">${dateRangeBar('vch')}<input placeholder="🔍 بحث بالرقم أو العميل" oninput="filt(this.value)" style="margin-bottom:8px"><div id="lst">${rows.map(x=>`<div class="li" data-q="${esc((fmtNo('vch',x)+' '+cn(x)).toLowerCase())}" onclick="openR('${x.id}')"><span>${fmtNo('vch',x)} ${x.status==='draft'?'<span class="bd d">مسودة</span>':''}<br><span class="m">${esc(cn(x))} · ${x.date} · ${esc(x.reason||'')}</span></span><b>${f(x.a)}</b></div>`).join('')||'<div class="m">لا توجد سندات</div>'}</div></div></div>`}
 function openR(id){const r=st.vch.find(x=>x.id===id);if(!r)return;if(r.status==='draft'){rd={...blankR(),...r};go('rcp')}else go('rcpv',id)}
 function rcpFullAmount(){if(rd.inv){const inv=st.inv.find(i=>i.no===rd.inv);return inv?r2(leftOf(inv)):0}return rd.cid?r2(bal(rd.cid)):0}
-function rcpCalcTotalRef(){
+function rcpCalcTotal(){
  const invObj=rd.inv?st.inv.find(i=>i.no===rd.inv):null;
  const base=invObj?leftOf(invObj):(rd.cid?bal(rd.cid):0);
  const alreadyCounted=rd.id&&st.vch.some(v=>v.id===rd.id&&v.status==='issued');
  return alreadyCounted?r2(base+(+rd.a||0)):r2(base)}
 function pRcp(v){custPickTarget='rd';const c=rd.cid?cusOf(rd.cid):null;
- if(typeof rd.totalRef!=='number')rd.totalRef=rcpCalcTotalRef();
+ if(typeof rd.total!=='number')rd.total=rcpCalcTotal();
  v.innerHTML=`<div class="wide"><div class="card"><div class="fg"><div><label>استلمنا من (العميل)</label>${custPickerHTML('custpick_rd',rd.cid)}
- <div class="row" style="margin-top:6px"><button class="g s" onclick="custPickTarget='rd';rd.cid='';rd.full=false;delete rd.totalRef;draw()">عميل نقدي (بدون)</button><button class="g s" onclick="backTo='rcp';go('cusf',null)">+ عميل جديد</button>${c?`<button class="g s" onclick="backTo='rcp';go('cusf',${c.id})">تعديل العميل</button>`:''}</div>
+ <div class="row" style="margin-top:6px"><button class="g s" onclick="custPickTarget='rd';rd.cid='';rd.full=false;delete rd.total;draw()">عميل نقدي (بدون)</button><button class="g s" onclick="backTo='rcp';go('cusf',null)">+ عميل جديد</button>${c?`<button class="g s" onclick="backTo='rcp';go('cusf',${c.id})">تعديل العميل</button>`:''}</div>
  ${c?`<div class="m" style="margin-top:6px">${c.vat?'الرقم الضريبي: '+esc(c.vat)+'<br>':''}${c.cr?'س.ت: '+esc(c.cr):''}</div>`:''}</div>
  <div><label>التاريخ</label><input type="date" value="${rd.date}" onchange="rd.date=this.value"></div>
+ <div><label>المبلغ الإجمالي (ر.س)</label><input id="rd_total" type="number" inputmode="decimal" value="${rd.total}" oninput="rcpSetTotal(this.value)"></div>
  <div><label>المبلغ المدفوع (ر.س)</label><input id="rd_paid" type="number" inputmode="decimal" value="${rd.a}" ${rd.full?'disabled':''} oninput="rcpSetPaid(this.value)"></div>
- <div><label>المبلغ المتبقي (ر.س)</label><input id="rd_remain" type="number" inputmode="decimal" value="${f(Math.max(0,rd.totalRef-(+rd.a||0)))}" ${rd.full||!rd.cid?'disabled':''} oninput="rcpSetRemain(this.value)"></div>
+ <div><label>المبلغ المتبقي (ر.س)</label><input id="rd_remain" type="number" inputmode="decimal" value="${f(Math.max(0,rd.total-(+rd.a||0)))}" ${rd.full?'disabled':''} oninput="rcpSetRemain(this.value)"></div>
  <div><label>طريقة الدفع</label><select onchange="rd.m=this.value">${['نقدي','تحويل بنكي','شبكة','شيك'].map(x=>`<option ${rd.m===x?'selected':''}>${x}</option>`).join('')}</select></div></div>
- <label class="ck" style="margin-top:10px"><input type="checkbox" ${rd.full?'checked':''} ${rd.cid?'':'disabled'} onchange="rd.full=this.checked;if(rd.full)rd.a=Math.min(rd.totalRef,rcpFullAmount());rcpSyncFields();updRcpTotals()">استلام المبلغ بالكامل (سداد الرصيد المستحق)</label>
- ${rd.cid?'':'<div class="m" style="margin-top:4px">اختر عميلاً أولاً لتفعيل هذا الخيار وحقل المتبقي</div>'}
+ <label class="ck" style="margin-top:10px"><input type="checkbox" ${rd.full?'checked':''} onchange="rd.full=this.checked;if(rd.full)rd.a=rd.total;draw()">استلام المبلغ بالكامل (سداد الرصيد المستحق)</label>
  <label style="margin-top:10px">وذلك مقابل</label><input value="${esc(rd.reason)}" oninput="rd.reason=this.value"></div>
- <div class="card" id="rtot"></div>
  <div id="errmsg" class="err"></div>
- <div class="acts"><button class="g" onclick="doPreviewR()">👁 معاينة</button><button class="g" onclick="saveR('draft')">💾 حفظ كمسودة</button><button onclick="saveR('issued')">✅ ${rd.id&&st.vch.find(x=>x.id===rd.id&&x.status==='issued')?'حفظ التعديلات':'إصدار السند'}</button></div></div>`;updRcpTotals()}
-function rcpSetPaid(v){rd.a=+v||0;rcpSyncFields();updRcpTotals()}
-function rcpSetRemain(v){const remain=+v||0;rd.a=r2(Math.max(0,rd.totalRef-remain));rcpSyncFields();updRcpTotals()}
-function rcpSyncFields(){const ep=document.getElementById('rd_paid'),er=document.getElementById('rd_remain');
+ <div class="acts"><button class="g" onclick="doPreviewR()">👁 معاينة</button><button class="g" onclick="saveR('draft')">💾 حفظ كمسودة</button><button onclick="saveR('issued')">✅ ${rd.id&&st.vch.find(x=>x.id===rd.id&&x.status==='issued')?'حفظ التعديلات':'إصدار السند'}</button></div></div>`}
+function rcpSetTotal(v){rd.total=+v||0;rcpSyncFields()}
+function rcpSetPaid(v){rd.a=+v||0;rcpSyncFields()}
+function rcpSetRemain(v){const remain=+v||0;rd.a=r2(rd.total-remain);rcpSyncFields()}
+function rcpSyncFields(){const et=document.getElementById('rd_total'),ep=document.getElementById('rd_paid'),er=document.getElementById('rd_remain');
+ if(et&&document.activeElement!==et)et.value=rd.total;
  if(ep&&document.activeElement!==ep)ep.value=rd.a;
- if(er&&document.activeElement!==er)er.value=f(Math.max(0,rd.totalRef-(+rd.a||0)))}
-function updRcpTotals(){const e=document.getElementById('rtot');if(!e)return;
- e.innerHTML=`<div class="tot"><span>الإجمالي المستحق${rd.inv?' (الفاتورة '+rd.inv+')':''}</span><span>${f(rd.totalRef||0)}</span></div>
- <div class="tot"><span>المبلغ المدفوع</span><span>${f(rd.a)}</span></div>
- <div class="tot big"><span>المتبقي على العميل</span><span>${f(Math.max(0,(rd.totalRef||0)-(rd.a||0)))}</span></div>`}
+ if(er&&document.activeElement!==er)er.value=f(Math.max(0,rd.total-(+rd.a||0)))}
 async function saveR(status){if(!(rd.a>0))return showErr('أدخل مبلغاً أكبر من صفر');
- const old=rd.id?st.vch.find(x=>x.id===rd.id):null,rec={...(old||{}),id:rd.id||uid(),status,cid:rd.cid,date:rd.date,a:r2(rd.a),reason:rd.reason||'',m:rd.m||'نقدي',inv:rd.inv||''};
+ const old=rd.id?st.vch.find(x=>x.id===rd.id):null,rec={...(old||{}),id:rd.id||uid(),status,cid:rd.cid,date:rd.date,a:r2(rd.a),total:r2(rd.total||rd.a),reason:rd.reason||'',m:rd.m||'نقدي',inv:rd.inv||''};
  if(status==='issued'&&!rec.no){rec.no=await allocNo('vch');rec.ts=new Date().toISOString()}if(status==='draft'&&!rec.no)rec.no='';
  const i=st.vch.findIndex(x=>x.id===rec.id);if(i>=0)st.vch[i]=rec;else st.vch.push(rec);
  if(!S('vch'))return;cloudSet('vouchers',rec.id,rec);toast(status==='draft'?'تم حفظ المسودة':'تم إصدار السند');rd=null;status==='draft'?go('rcpl'):go('rcpv',rec.id)}
 function rcpHTML(r){const c=custOf({...r,status:'x'})||null,name=c?c.n:'—';
- const linkedInv=r.inv?st.inv.find(i=>i.no===r.inv):null,tot=linkedInv?linkedInv.total:r.a,remain=c?Math.max(0,bal(c.id)):0;
+ const linkedInv=r.inv?st.inv.find(i=>i.no===r.inv):null;
+ const tot=(r.total!=null)?r.total:(linkedInv?linkedInv.total:r.a);
+ const remain=Math.max(0,r2(tot-r.a));
  return `<div class="doc doc-rcp" id="docsrc">
- <div class="dh"><div style="display:flex;gap:16px;align-items:flex-start"><img class="lg" src="${getLogo()}"><div style="padding-top:6px"><div class="cn" style="font-size:calc(var(--doc-name-size) * 0.75)">${esc(st.set.name)}</div><div class="sm">الرقم الضريبي: ${esc(st.set.vat)}<br>س.ت: ${esc(st.set.cr)}<br>${esc(st.set.addr)}</div></div></div>
+ <div class="dh"><div style="display:flex;gap:16px;align-items:flex-start"><img class="lg" src="${getLogo()}"><div style="padding-top:6px"><div class="cn" style="font-size:calc(var(--doc-name-size) * 0.75)">${esc(st.set.name)}</div><div class="sm">الرقم الضريبي: <span dir="ltr">${esc(st.set.vat)}</span><br>س.ت: <span dir="ltr">${esc(st.set.cr)}</span><br>${esc(st.set.addr)}</div></div></div>
  <div style="text-align:center;padding-top:10px"><div style="font-size:26px;font-weight:700">سند قبض</div><div class="sm" style="letter-spacing:1px">RECEIPT VOUCHER</div></div></div>
- <div class="rvhead"><div class="item"><div class="lbl">رقم السند</div><div class="val" style="color:#1d4ed8">${esc(fmtNo('vch',r))}</div></div><div class="item"><div class="lbl">التاريخ</div><div class="val">${r.date}</div></div><div class="item"><div class="lbl">المبلغ</div><div class="val">${f(r.a)} ر.س</div></div></div>
+ <div class="rvhead"><div class="item"><div class="lbl">رقم السند</div><div class="val" style="color:#1d4ed8" dir="ltr">${esc(fmtNo('vch',r))}</div></div><div class="item"><div class="lbl">التاريخ</div><div class="val" dir="ltr">${r.date}</div></div><div class="item"><div class="lbl">المبلغ</div><div class="val" dir="ltr">${f(r.a)} ر.س</div></div></div>
  <div style="display:flex;gap:40px;margin-top:26px">
  <div style="flex:1.4">
  <div class="rvfield"><span class="lbl">استلمنا من السيد/السادة :</span><span class="ln">${esc(name)}</span></div>
- ${c&&(c.vat||c.cr)?`<div class="rvfield"><span class="lbl">الرقم الضريبي / س.ت :</span><span class="ln">${c.vat?esc(c.vat):''}${c.cr?' — '+esc(c.cr):''}</span></div>`:''}
- <div class="rvfield"><span class="lbl">مبلغ وقدره :</span><span class="ln">${f(r.a)} ريال سعودي</span></div>
+ ${c&&(c.vat||c.cr)?`<div class="rvfield"><span class="lbl">الرقم الضريبي / س.ت :</span><span class="ln" dir="ltr">${c.vat?esc(c.vat):''}${c.cr?' — '+esc(c.cr):''}</span></div>`:''}
+ <div class="rvfield"><span class="lbl">مبلغ وقدره :</span><span class="ln"><span dir="ltr">${f(r.a)}</span> ريال سعودي</span></div>
  <div class="rvfield"><span class="lbl">نقداً / شيك / تحويل :</span><span class="ln">${esc(r.m||'نقدي')}</span></div>
  <div class="rvfield"><span class="lbl">وذلك مقابل :</span><span class="ln">${esc(r.reason||'')}</span></div>
  </div>
- <div style="flex:1;max-width:270px" class="sl"><div class="tr"><span>الإجمالي${linkedInv?' (الفاتورة '+linkedInv.no+')':''}</span><span>${f(tot)} ر.س</span></div><div class="tr"><span>المبلغ الواصل</span><span>${f(r.a)} ر.س</span></div><div class="tr b"><span>المتبقي على العميل</span><span>${f(remain)} ر.س</span></div></div>
+ <div style="flex:1;max-width:270px" class="sl"><div class="tr"><span>الإجمالي${linkedInv?' (الفاتورة '+linkedInv.no+')':''}</span><span dir="ltr">${f(tot)} ر.س</span></div><div class="tr"><span>المدفوع</span><span dir="ltr">${f(r.a)} ر.س</span></div><div class="tr b"><span>المتبقي على العميل</span><span dir="ltr">${f(remain)} ر.س</span></div></div>
  </div>
  <div class="sigs" style="margin-top:50px"><div><div style="height:150px"></div><div class="sm">المستلم / Receiver</div><div class="sigl"></div></div><div><img class="seal" src="${SEAL}"><div class="sm"><b>${esc(st.set.name)}</b></div><div class="sigl" style="margin-top:14px"></div></div></div></div>`}
 function pRcpV(v){const r=st.vch.find(x=>x.id===arg);if(!r)return go('rcpl');
@@ -677,7 +687,7 @@ function pCst(v){const c=cusOf(arg);if(!c)return go('cus');
  const rows=[...iss('inv').filter(x=>x.cid===c.id).map(x=>({d:x.date,t:'فاتورة '+x.no,a:x.total})),...iss('vch').filter(x=>x.cid===c.id).map(x=>({d:x.date,t:'سند قبض '+x.no,a:-x.a}))].sort((a,b)=>a.d<b.d?-1:1);let run=0;
  v.innerHTML=`<div class="wide"><div class="card"><h2>${esc(c.n)}</h2><div class="m">${esc(c.mob||c.tel||'')} ${esc(c.email||'')}<br>${esc(caddr(c))}</div><div class="tot big"><span>الرصيد المستحق</span><span>${f(bal(c.id))}</span></div></div>
  <div class="card">${rows.map(r=>{run+=r.a;return `<div class="li" style="cursor:default"><span>${r.t}<br><span class="m">${r.d}</span></span><span style="text-align:left">${f(r.a)}<br><span class="m">${f(run)}</span></span></div>`}).join('')||'<div class="m">لا توجد حركات</div>'}</div>
- <div class="acts"><button onclick="rd=blankR();rd.cid=${c.id};rd.a=Math.max(0,${bal(c.id)});rd.full=true;go('rcp')">💵 سند قبض</button><button class="g" onclick="go('cusf',${c.id})">تعديل</button><button class="g" onclick="go('cus')">رجوع</button></div></div>`}
+ <div class="acts"><button onclick="rd=blankR();rd.cid=${c.id};rd.total=Math.max(0,r2(${bal(c.id)}));rd.a=rd.total;rd.full=true;go('rcp')">💵 سند قبض</button><button class="g" onclick="go('cusf',${c.id})">تعديل</button><button class="g" onclick="go('cus')">رجوع</button></div></div>`}
 
 /* ---------- products / settings ---------- */
 function pProd(v){v.innerHTML=`<div class="wide"><div class="card"><h2>منتج / خدمة</h2><div class="row"><input id="pn" placeholder="الاسم"><input id="pp" type="number" inputmode="decimal" placeholder="السعر"><input id="ps" type="number" inputmode="numeric" placeholder="المخزون"></div><button class="w" onclick="addP()">إضافة</button><div class="m" style="margin-top:6px">اترك المخزون فارغاً للخدمات. السعر هنا غير شامل الضريبة.</div></div>
@@ -727,7 +737,7 @@ function openNote(invNo,type,isReturn){const inv=st.inv.find(i=>i.no===invNo);if
 function startReturnByNo(){const no=V('retno');if(!no)return showErr('اكتب رقم الفاتورة');
  const inv=st.inv.find(i=>i.no===no);if(!inv)return showErr('لا توجد فاتورة صادرة بهذا الرقم');
  openNote(no,'credit',true)}
-function retAmount(){return calc(nd.items.filter(l=>l.retQty>0).map(l=>({...l,q:l.retQty})),nd.incl).total}
+function retAmount(){return calc(nd.items.filter(l=>l.retQty>0).map(retLine),nd.incl).total}
 function updRetTotal(){const e=document.getElementById('rettot');if(e)e.textContent=f(retAmount())}
 function pNote(v){const inv=st.inv.find(i=>i.no===nd.invNo);
  if(nd.isReturn){
@@ -754,17 +764,17 @@ async function saveNote(){
  if(!(amount>0))return showErr('أدخل مبلغاً أكبر من صفر، أو حدّد كمية إرجاع لصنف واحد على الأقل');
  const c=cusOf(nd.cid),inv0=st.inv.find(i=>i.no===nd.invNo);
  const rec={id:uid(),status:'issued',no:await allocNo(nd.type==='credit'?'cn':'dn'),ts:new Date().toISOString(),type:nd.type,isReturn:nd.isReturn,invNo:nd.invNo,invDate:inv0?inv0.date:'',cid:nd.cid,cs:c?{...c,addr:caddr(c)}:null,date:nd.date,amount:r2(amount),reason:nd.reason||''};
- if(nd.isReturn){rec.items=nd.items.filter(l=>l.retQty>0).map(l=>({n:l.n,desc:l.desc||'',q:l.retQty,p:l.p,disc:l.disc||0}));
+ if(nd.isReturn){rec.incl=!!nd.incl;rec.items=nd.items.filter(l=>l.retQty>0).map(l=>{const x=retLine(l);return{n:l.n,desc:l.desc||'',q:x.q,p:l.p,disc:x.disc,dt:l.dt==='a'?'a':'p'}});
   const t=calc(rec.items,nd.incl);rec.sub=t.sub;rec.tax=t.tax;rec.total=t.total}
  st.cnotes.push(rec);S('cnotes');cloudSet('cnotes',rec.id,rec);toast(nd.isReturn?'تم حفظ الفاتورة المرتجعة':'تم حفظ الإشعار');
  if(nd.isReturn)go('retv',rec.id);else{const inv=st.inv.find(i=>i.no===nd.invNo);go('view',{k:'inv',id:inv.id})}}
 function retHTML(r){const c=custOf(r);
- const rows=(r.items||[]).map(l=>`<tr><td>${esc(l.n)}${l.desc?`<div class="custdetail" style="margin-top:2px">${esc(l.desc)}</div>`:''}</td><td class="c">${f(l.p)}</td><td class="c">${l.q}</td><td class="c">${l.disc||0}%</td><td class="c">${f(l.q*l.p*(1-(l.disc||0)/100))}</td></tr>`).join('');
+ const rows=(r.items||[]).map(l=>`<tr><td>${esc(l.n)}${l.desc?`<div class="custdetail" style="margin-top:2px">${esc(l.desc)}</div>`:''}</td><td class="c">${f(r.incl?l.p/1.15:l.p)}</td><td class="c">${l.q}</td><td class="c">${discLabel(l)}</td><td class="c">${f(net(l,!!r.incl))}</td></tr>`).join('');
  return `<div class="doc" id="docsrc"><div class="dh">
- <div><img class="lg" src="${getLogo()}"><div class="dno"><b>رقم الفاتورة المرتجعة</b><div class="n">${esc(r.no)}</div><div class="dt">التاريخ<br>${r.date}</div></div></div>
- <div class="dh-l"><div class="cn">${esc(st.set.name)}</div><div class="sm">الرقم الضريبي: ${esc(st.set.vat)}<br>س.ت: ${esc(st.set.cr)}<br>${esc(st.set.addr)}</div><div class="totbadge">${f(r.total)} ر.س</div></div></div>
+ <div><img class="lg" src="${getLogo()}"><div class="dno"><b>رقم الفاتورة المرتجعة</b><div class="n" dir="ltr">${esc(r.no)}</div><div class="dt">التاريخ<br><span dir="ltr">${r.date}</span></div></div></div>
+ <div class="dh-l"><div class="cn">${esc(st.set.name)}</div><div class="sm">الرقم الضريبي: <span dir="ltr">${esc(st.set.vat)}</span><br>س.ت: <span dir="ltr">${esc(st.set.cr)}</span><br>${esc(st.set.addr)}</div><div class="totbadge" dir="ltr">${f(r.total)} ر.س</div></div></div>
  <div class="dtitle">فاتورة مرتجعة (إشعار دائن)</div>
- <div class="sm" style="margin-bottom:10px">مرجع الفاتورة الأصلية: <b>${esc(r.invNo)}</b>${r.invDate?' — تاريخ '+r.invDate:''}</div>
+ <div class="sm" style="margin-bottom:10px">مرجع الفاتورة الأصلية: <b dir="ltr">${esc(r.invNo)}</b>${r.invDate?' — تاريخ <span dir="ltr">'+r.invDate+'</span>':''}</div>
  <table class="it"><tr><th>البند</th><th class="c">سعر الوحدة</th><th class="c">الكمية المرتجعة</th><th class="c">الخصم</th><th class="c">المجموع</th></tr>${rows}</table>
  <div class="sum"><div class="sr">${c?`<div class="sm">مرتجع من</div><div class="custname">${esc(c.n)}</div>${c.vat?`<div class="custdetail">الرقم الضريبي: ${esc(c.vat)}</div>`:''}${c.cr?`<div class="custdetail">س.ت: ${esc(c.cr)}</div>`:''}`:'<div class="sm">عميل نقدي</div>'}
  <div class="qr">${qrImg(r)}</div></div>
