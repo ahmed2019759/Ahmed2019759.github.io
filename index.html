@@ -75,7 +75,7 @@ table.it .c{text-align:center}
 .sum{display:flex;justify-content:space-between;gap:24px;margin-top:22px;align-items:flex-start}
 .sum .sr{text-align:right;flex:1}.sum .sl{width:330px}.sum .qr img{width:130px;height:130px;margin-top:10px}
 .sl .tr{display:flex;justify-content:space-between;padding:6px 0;font-size:13px}.sl .tr.b{font-weight:700;font-size:15px}
-.docnote{font-size:12.5px;color:#333;white-space:pre-wrap;line-height:1.8}
+.docnote{font-size:12.5px;color:#333;line-height:1.8;letter-spacing:0;word-spacing:normal;word-break:normal;overflow-wrap:normal;white-space:normal}.docnote .nl{min-height:1em}
 .rv td{padding:14px 10px;border-bottom:1px solid #999;font-size:15px}
 .rvhead{display:flex;justify-content:space-between;align-items:center;margin-top:18px;padding-bottom:14px;border-bottom:2px solid #1c2b4a}
 .rvhead .item{text-align:center}
@@ -359,7 +359,17 @@ const NS_FONTS=[['','خط المستند'],['IBM Plex Sans Arabic','IBM Plex'],[
 const NS_BG=[['','بدون'],['#f1f3f5','رمادي فاتح'],['#fff8d6','أصفر فاتح'],['#e8f1ff','أزرق فاتح'],['#e9f7ee','أخضر فاتح'],['#fdecec','وردي فاتح']];
 const NS_BD=[['','بدون'],['1px solid #999','خط رفيع'],['2px solid #333','خط عريض'],['1px dashed #888','خط متقطع']];
 function nsStyle(ns){const n={...defNs(),...(ns||{})};let c=`font-size:${+n.size||12.5}px;font-weight:${n.w==='700'?700:400};`;if(n.font)c+=`font-family:'${n.font}',Tahoma,sans-serif;`;if(n.bg)c+=`background:${n.bg};`;if(n.bd)c+=`border:${n.bd};`;if(n.bg||n.bd)c+='padding:10px 14px;border-radius:6px;';return c}
-function noteBlock(txt,ns){return txt?`<div class="docfoot"><div class="docnote" style="${nsStyle(ns)}">${esc(txt)}</div></div>`:''}
+function noteBlock(txt,ns){return txt?`<div class="docfoot"><div class="docnote" style="${nsStyle(ns)}" data-txt="${esc(txt)}">${String(txt).split(/\r?\n/).map(x=>`<div class="nl">${esc(x)||'&nbsp;'}</div>`).join('')}</div></div>`:''}
+/* draw Arabic notes as images before export: the export engine can break Arabic letter joining in free text */
+async function noteToImg(el){const txt=el.getAttribute('data-txt');if(!txt)return;const cs=getComputedStyle(el);
+ const size=parseFloat(cs.fontSize)||12.5,wt=cs.fontWeight||'400',fam=cs.fontFamily,lh=size*1.8,font=`${wt} ${size}px ${fam}`;
+ try{if(document.fonts&&document.fonts.load)await document.fonts.load(font,txt)}catch(e){}
+ const W=Math.max(10,el.clientWidth-parseFloat(cs.paddingLeft||0)-parseFloat(cs.paddingRight||0));
+ const m=document.createElement('canvas').getContext('2d');m.font=font;m.direction='rtl';
+ const lines=[];String(txt).split(/\r?\n/).forEach(par=>{const ws=par.split(/\s+/).filter(Boolean);if(!ws.length){lines.push('');return}let cur='';ws.forEach(w=>{const t=cur?cur+' '+w:w;if(cur&&m.measureText(t).width>W){lines.push(cur);cur=w}else cur=t});lines.push(cur)});
+ const sc=3,cv=document.createElement('canvas');cv.width=Math.ceil(W*sc);cv.height=Math.ceil(lines.length*lh*sc);const c=cv.getContext('2d');c.scale(sc,sc);c.font=font;c.direction='rtl';c.textAlign='right';c.textBaseline='middle';c.fillStyle=cs.color||'#333';
+ lines.forEach((ln,i)=>c.fillText(ln,W,i*lh+lh/2));
+ el.innerHTML=`<img alt="" src="${cv.toDataURL('image/png')}" style="display:block;width:${W}px;height:${lines.length*lh}px">`}
 function nsObj(o){const t=o==='nd'?nd:ed;if(!t.ns)t.ns=defNs();return t}
 function setNs(o,k,v){const t=nsObj(o);t.ns={...defNs(),...t.ns,[k]:v};const e=document.getElementById('nsprev_'+o);if(e)e.setAttribute('style',nsStyle(t.ns));const z=document.getElementById('nssz_'+o);if(z)z.textContent=t.ns.size+'px';try{localStorage.setItem('ns_last',JSON.stringify(t.ns))}catch(e){}}
 function lastNs(){try{const x=JSON.parse(localStorage.getItem('ns_last')||'null');return x?{...defNs(),...x}:defNs()}catch(e){return defNs()}}
@@ -608,7 +618,9 @@ async function capture(){const src=document.getElementById('docsrc');if(!src)thr
  const box=document.createElement('div');box.style.cssText='position:fixed;left:-10000px;top:0;width:'+srcW+'px;background:#fff;z-index:-1';
  box.innerHTML=src.outerHTML;const el=box.firstElementChild;el.style.boxShadow='none';document.body.appendChild(box);
  try{el.querySelectorAll('svg.sar-i').forEach(v=>{const r=v.getBoundingClientRect(),c=getComputedStyle(v).color;v.setAttribute('width',r.width);v.setAttribute('height',r.height);v.querySelectorAll('path').forEach(q=>q.setAttribute('fill',c))})}catch(e){}
- try{if(document.fonts&&document.fonts.ready)await document.fonts.ready;return await html2canvas(el,{scale:2,backgroundColor:'#ffffff',useCORS:true,logging:false})}finally{box.remove()}}
+ try{if(document.fonts&&document.fonts.ready)await document.fonts.ready;
+  for(const n of el.querySelectorAll('.docnote[data-txt]')){try{await noteToImg(n)}catch(e){}}
+  return await html2canvas(el,{scale:2,backgroundColor:'#ffffff',useCORS:true,logging:false})}finally{box.remove()}}
 async function buildPdfBlob(cv,landscape){
  const J=window.jspdf&&window.jspdf.jsPDF;if(!J)throw new Error('تعذّر تحميل أداة PDF، تحقق من الإنترنت');
  const maxW=landscape?297:210,maxH=landscape?210:297;
