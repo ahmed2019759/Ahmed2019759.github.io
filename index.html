@@ -179,6 +179,10 @@ let st={set:L('set',{name:'شركة غادة علي شماخي التجارية'
  design:L('design',{logo:200,font:'IBM Plex Sans Arabic',nameSize:24,titleSize:21,titleGap:8,logoPos:'right',titleAlign:'center',logoData:null})};
 const num=x=>parseInt(String(x==null?'':x).replace(/\D/g,''))||0;
 const iss=k=>st[k].filter(x=>x.status!=='draft');
+function chkNo(k,v,selfId){v=String(v==null?'':v).trim();if(!v)return{v:''};
+ if(/^\d+$/.test(v))v=k==='quo'?+v:padNo(k,+v);
+ const dup=st[k].some(x=>x.id!==selfId&&x.status!=='draft'&&x.no!==''&&String(x.no)===String(v));
+ if(dup)return{err:'الرقم '+v+' مستخدم مسبقاً في '+(k==='quo'?'عرض سعر':'سند')+' آخر. اختر رقماً مختلفاً أو اترك الخانة فارغة للترقيم التلقائي.'};return{v}}
 function nextNo(k){const n=iss(k).reduce((m,x)=>Math.max(m,num(x.no)),0)+1;return k==='quo'?n:(k==='inv'?'INV-':'RV-')+String(n).padStart(5,'0')}
 /* ---------- server-side numbering (prevents duplicate/gap numbers across devices) ---------- */
 const NO_PREFIX={inv:'INV-',vch:'RV-',cn:'CN-',dn:'DN-'};
@@ -442,7 +446,7 @@ function draw(){
  if(typeof requestAnimationFrame!=='undefined')requestAnimationFrame(()=>requestAnimationFrame(fitPageZoom));else fitPageZoom()}
 function newDoc(k){ed=blank(k);go('edit')}
 function newR(){rd=blankR();go('rcp')}
-function editDoc(k,id){const r=st[k].find(x=>x.id===id);if(!r)return;ed={...blank(k),kind:k,id:r.id,ty:r.ty||'T',cid:r.cid||'',date:r.date,l:JSON.parse(JSON.stringify(r.l||r.lines||[{n:'',q:1,p:0,disc:0}])),incl:!!r.incl,note:r.note||'',gd:r.gd||0,gdt:r.gdt||'p',ns:r.ns||defNs(),paidFull:!!r.dPaidFull,paidAmt:r.dPaid||0,fromQuo:r.fromQuo||''};go('edit')}
+function editDoc(k,id){const r=st[k].find(x=>x.id===id);if(!r)return;ed={...blank(k),kind:k,id:r.id,ty:r.ty||'T',cid:r.cid||'',date:r.date,l:JSON.parse(JSON.stringify(r.l||r.lines||[{n:'',q:1,p:0,disc:0}])),incl:!!r.incl,note:r.note||'',gd:r.gd||0,gdt:r.gdt||'p',ns:r.ns||defNs(),paidFull:!!r.dPaidFull,paidAmt:r.dPaid||0,fromQuo:r.fromQuo||'',no:k==='quo'?(r.no||''):''};go('edit')}
 
 /* ---------- dashboard ---------- */
 const MONTH_AR=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
@@ -515,7 +519,7 @@ function pEdit(v){custPickTarget='ed';const k=ed.kind,isI=k==='inv',qs=iss('quo'
  v.innerHTML=`<div class="wide"><div class="card">
  ${isI?`<div class="seg"><button class="${ed.ty==='T'?'on':''}" onclick="ed.ty='T';draw()">فاتورة ضريبية</button><button class="${ed.ty==='S'?'on':''}" onclick="ed.ty='S';draw()">فاتورة مبسطة</button></div>`:''}
  <div class="fg"><div><label>العميل${isI&&ed.ty==='T'?' (يلزم رقمه الضريبي)':''}</label>${custPickerHTML('custpick_ed',ed.cid)}<div class="row" style="margin-top:6px"><button class="g s" onclick="custPickTarget='ed';ed.cid='';draw()">عميل نقدي (بدون)</button><button class="g s" onclick="backTo='edit';go('cusf',null)">+ عميل جديد</button></div></div>
- <div><label>تاريخ ${isI?'الفاتورة':'عرض السعر'}</label><input type="date" value="${ed.date}" onchange="ed.date=this.value"></div>
+ <div><label>تاريخ ${isI?'الفاتورة':'عرض السعر'}</label><input type="date" value="${ed.date}" onchange="ed.date=this.value"></div>${isI?'':`<div><label>رقم عرض السعر</label><input value="${esc(ed.no||'')}" placeholder="تلقائي (${nextNo('quo')})" inputmode="numeric" oninput="ed.no=this.value"></div>`}
  ${isI&&qs.length&&!ed.id?`<div><label>تحويل من عرض سعر</label><select onchange="applyQuo(this.value)"><option value="">— اختر عرض سعر —</option>${qs.map(q=>`<option value="${q.id}" ${ed.fromQuo&&ed.fromQuo===q.no?'selected':''}>#${fmtNo('quo',q)} – ${esc(cn(q))} – ${f(q.total)}</option>`).join('')}</select></div>`:''}</div>
  <datalist id="pl">${st.prods.map(p=>`<option value="${esc(p.n)}">`).join('')}</datalist>
  <label class="ck" style="margin-top:10px"><input type="checkbox" ${ed.incl?'checked':''} onchange="ed.incl=this.checked;rl()">السعر المدخل شامل الضريبة (15%)</label>
@@ -538,13 +542,15 @@ async function saveDoc(status){const k=ed.kind,isI=k==='inv';
  if(status==='issued'){
   if(!st.set.name||!st.set.vat){toast('أكمل بيانات المنشأة أولاً');return go('set')}
   if(isI&&ed.ty==='T'&&(!c||!c.vat))return showErr('الفاتورة الضريبية تتطلب عميلاً له رقم ضريبي. أضف الرقم الضريبي للعميل من "إدارة العملاء"، أو اختر "فاتورة مبسطة".')}
- const old=ed.id?st[k].find(x=>x.id===ed.id):null,rec={...(old||{}),...buildRec(status)},wasDraft=!old||old.status==='draft';
+ const old=ed.id?st[k].find(x=>x.id===ed.id):null,rec={...(old||{}),...buildRec(status)},wasDraft=!old||old.status==='draft',oldNo=old?old.no:'';
+ if(k==='quo'){const mn=chkNo('quo',ed.no,rec.id);if(mn.err)return showErr(mn.err);if(mn.v!=='')rec.no=mn.v;else if(wasDraft)rec.no=''}
  if(status==='issued'){if(!rec.no)rec.no=await allocNo(k);if(!rec.ts)rec.ts=new Date().toISOString();rec.cs=c?{...c,addr:caddr(c)}:null;
   if(isI&&wasDraft){rec.l.forEach(l=>{const p=st.prods.find(x=>x.n===l.n);if(p&&p.s!=null)p.s-=l.q});S('prods');
    const paid=rec.dPaidFull?rec.total:rec.dPaid;if(paid>0){const vno=await allocNo('vch');st.vch.push({id:uid(),status:'issued',no:vno,ts:new Date().toISOString(),date:rec.date,cid:rec.cid,a:r2(paid),reason:'دفعة فاتورة '+rec.no,inv:rec.no,m:'نقدي'});S('vch')}}}
  else if(!rec.no)rec.no='';
  const i=st[k].findIndex(x=>x.id===rec.id);if(i>=0)st[k][i]=rec;else st[k].push(rec);
- if(!S(k))return;cloudSet(k==='inv'?'invoices':'quotes',rec.id,rec);toast(status==='draft'?'تم حفظ المسودة':'تم الإصدار');ed=null;
+ if(!S(k))return;cloudSet(k==='inv'?'invoices':'quotes',rec.id,rec);
+ if(k==='quo'&&oldNo!==''&&oldNo!=null&&String(oldNo)!==String(rec.no)){let ch=false;st.inv.forEach(i=>{if(String(i.fromQuo)===String(oldNo)){i.fromQuo=rec.no;ch=true;cloudSet('invoices',i.id,i)}});if(ch)S('inv')}toast(status==='draft'?'تم حفظ المسودة':'تم الإصدار');ed=null;
  if(status==='draft')go(k==='inv'?'list':'quol');else go('view',{k,id:rec.id})}
 
 /* ---------- document rendering ---------- */
@@ -662,6 +668,7 @@ function pRcp(v){custPickTarget='rd';const c=rd.cid?cusOf(rd.cid):null;
  <div class="row" style="margin-top:6px"><button class="g s" onclick="custPickTarget='rd';rd.cid='';rd.full=false;delete rd.total;draw()">عميل نقدي (بدون)</button><button class="g s" onclick="backTo='rcp';go('cusf',null)">+ عميل جديد</button>${c?`<button class="g s" onclick="backTo='rcp';go('cusf',${c.id})">تعديل العميل</button>`:''}</div>
  ${c?`<div class="m" style="margin-top:6px">${c.vat?'الرقم الضريبي: '+esc(c.vat)+'<br>':''}${c.cr?'س.ت: '+esc(c.cr):''}</div>`:''}</div>
  <div><label>التاريخ</label><input type="date" value="${rd.date}" onchange="rd.date=this.value"></div>
+ <div><label>رقم السند</label><input value="${esc(rd.no||'')}" placeholder="تلقائي (${nextNo('vch')})" oninput="rd.no=this.value"></div>
  <div><label>المبلغ الإجمالي (${SAR})</label><input id="rd_total" type="number" inputmode="decimal" value="${rd.total}" oninput="rcpSetTotal(this.value)"></div>
  <div><label>المبلغ المدفوع (${SAR})</label><input id="rd_paid" type="number" inputmode="decimal" value="${rd.a}" ${rd.full?'disabled':''} oninput="rcpSetPaid(this.value)"></div>
  <div><label>المبلغ المتبقي (${SAR})</label><input id="rd_remain" type="number" inputmode="decimal" value="${f(Math.max(0,rd.total-(+rd.a||0)))}" ${rd.full?'disabled':''} oninput="rcpSetRemain(this.value)"></div>
@@ -678,7 +685,9 @@ function rcpSyncFields(){const et=document.getElementById('rd_total'),ep=documen
  if(ep&&document.activeElement!==ep)ep.value=rd.a;
  if(er&&document.activeElement!==er)er.value=f(Math.max(0,rd.total-(+rd.a||0)))}
 async function saveR(status){if(!(rd.a>0))return showErr('أدخل مبلغاً أكبر من صفر');
- const old=rd.id?st.vch.find(x=>x.id===rd.id):null,rec={...(old||{}),id:rd.id||uid(),status,cid:rd.cid,date:rd.date,a:r2(rd.a),total:r2(rd.total||rd.a),reason:rd.reason||'',m:rd.m||'نقدي',inv:rd.inv||''};
+ const old=rd.id?st.vch.find(x=>x.id===rd.id):null,mn=chkNo('vch',rd.no,rd.id||'');if(mn.err)return showErr(mn.err);
+ const rec={...(old||{}),id:rd.id||uid(),status,cid:rd.cid,date:rd.date,a:r2(rd.a),total:r2(rd.total||rd.a),reason:rd.reason||'',m:rd.m||'نقدي',inv:rd.inv||''};
+ if(mn.v!=='')rec.no=mn.v;else if(!old||old.status==='draft')rec.no='';
  if(status==='issued'&&!rec.no){rec.no=await allocNo('vch');rec.ts=new Date().toISOString()}if(status==='draft'&&!rec.no)rec.no='';
  const i=st.vch.findIndex(x=>x.id===rec.id);if(i>=0)st.vch[i]=rec;else st.vch.push(rec);
  if(!S('vch'))return;cloudSet('vouchers',rec.id,rec);toast(status==='draft'?'تم حفظ المسودة':'تم إصدار السند');rd=null;status==='draft'?go('rcpl'):go('rcpv',rec.id)}
